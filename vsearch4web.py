@@ -3,7 +3,7 @@ import cx_Oracle
 from flask import Flask, render_template ,request,escape
 from search4letters import search4letters
 # import cx_Oracle.connect
-from DBcm import UseDatabase
+from DBcm import UseDatabase,ConnectionError
 
 
 app=Flask(__name__)
@@ -49,11 +49,11 @@ app.config['dbconfig'] =  { 'user': 'scott',
 
 
 def log_request(req:'flask_request',res:str)->None:
-    with UseDatabase(app.config['dbconfig']) as cursor:
-        _sql = """insert into log(phrase,letter,ip,browser_setting,result)
-                 values(:1,:2,:3,:4,:5)"""
-        print('inserting data   ',_sql)
-        cursor.execute(_sql,[req.form['phrase'],req.form['letters'],req.remote_addr,req.user_agent.browser,res])
+        with UseDatabase(app.config['dbconfig']) as cursor:
+            _sql = """insert into log(phrase,letter,ip,browser_setting,result)
+                     values(:1,:2,:3,:4,:5)"""
+            print('inserting data   ',_sql)
+            cursor.execute(_sql,[req.form['phrase'],req.form['letters'],req.remote_addr,req.user_agent.browser,res])
 
 
 
@@ -67,7 +67,10 @@ def do_search()->'html':
     letter=request.form['letters']
     title='here is your results'
     results=str(search4letters(phrase,letter))
-    log_request(request,results)
+    try:
+        log_request(request,results)
+    except Exception as e:
+        print('*** error is {}',format(e))
     return render_template('results.html',
                            the_phrase=phrase,
                            the_letter=letter,
@@ -109,10 +112,15 @@ def entry_page() ->'html':
 
 @app.route('/viewlog')
 def view_the_log()->'html':
-    with UseDatabase(app.config['dbconfig']) as cursor:
-        _sql="""select phrase,letter,ip,browser_setting,result from log"""
-        cursor.execute(_sql)
-        contents=cursor.fetchall()
+    try:
+        with UseDatabase(app.config['dbconfig']) as cursor:
+            _sql="""select phrase,letter,ip,browser_setting,result from log"""
+            cursor.execute(_sql)
+            contents = cursor.fetchall()
+    # except ConnectionError as e:
+    #     print('user define  error in db call and error is ->{}'.format(e))
+    except Exception as e:
+        print('some error in db call and error is - > {}'.format(e))
     titles=('phrase','letters','Remote_addr','user_agent','Results')
     return render_template('viewlog.html',
                            the_title='view Log',
